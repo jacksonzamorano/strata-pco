@@ -23,6 +23,7 @@ const (
 )
 
 var httpClient = &http.Client{Timeout: defaultHTTPTimeout}
+var pcoTimeLocation = time.Local
 
 type authorization struct {
 	applicationID string
@@ -497,12 +498,32 @@ func parsePCOTime(value string) (time.Time, bool) {
 		return time.Time{}, false
 	}
 
-	layouts := []string{time.RFC3339, "2006-01-02"}
-	for _, layout := range layouts {
-		parsed, err := time.Parse(layout, trimmed)
+	if parsed, err := time.Parse(time.RFC3339, trimmed); err == nil {
+		return preserveWallClockTime(parsed, pcoTimeLocation), true
+	}
+
+	for _, layout := range []string{"2006-01-02T15:04:05", "2006-01-02"} {
+		parsed, err := time.ParseInLocation(layout, trimmed, pcoTimeLocation)
 		if err == nil {
 			return parsed, true
 		}
 	}
 	return time.Time{}, false
+}
+
+func preserveWallClockTime(parsed time.Time, location *time.Location) time.Time {
+	if location == nil {
+		location = time.Local
+	}
+
+	return time.Date(
+		parsed.Year(),
+		parsed.Month(),
+		parsed.Day(),
+		parsed.Hour(),
+		parsed.Minute(),
+		parsed.Second(),
+		parsed.Nanosecond(),
+		location,
+	)
 }

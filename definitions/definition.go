@@ -8,7 +8,7 @@ import (
 
 var Manifest = component.ComponentManifest{
 	Name:    "pco",
-	Version: "1.0.0",
+	Version: "1.0.1",
 }
 
 var ListServiceTypes = component.Define[struct{}, ListServiceTypesOutput](Manifest, "list-service-types")

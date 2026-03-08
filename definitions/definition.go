@@ -8,7 +8,7 @@ import (
 
 var Manifest = component.ComponentManifest{
 	Name:    "pco",
-	Version: "1.0.1",
+	Version: "1.0.2",
 }
 
 var ListServiceTypes = component.Define[struct{}, ListServiceTypesOutput](Manifest, "list-service-types")
@@ -46,11 +46,12 @@ type ServiceTypeSummary struct {
 }
 
 type PlanSummary struct {
-	ID          string     `json:"id"`
-	Title       string     `json:"title"`
-	SeriesTitle string     `json:"seriesTitle"`
-	SortDate    time.Time  `json:"sortDate"`
-	LastTimeAt  *time.Time `json:"lastTimeAt,omitempty"`
+	ID             string     `json:"id"`
+	Title          string     `json:"title"`
+	SeriesTitle    string     `json:"seriesTitle"`
+	SortDate       time.Time  `json:"sortDate"`
+	FirstServiceAt *time.Time `json:"firstServiceAt,omitempty"`
+	LastTimeAt     *time.Time `json:"lastTimeAt,omitempty"`
 }
 
 type PlanTeam struct {

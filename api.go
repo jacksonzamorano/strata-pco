@@ -82,7 +82,8 @@ type pcoPlanAttributes struct {
 }
 
 type pcoPlanRelationships struct {
-	Series pcoRelationship `json:"series"`
+	Series    pcoRelationship           `json:"series"`
+	PlanTimes pcoRelationshipCollection `json:"plan_times"`
 }
 
 type pcoTeamMemberResource struct {
@@ -103,6 +104,10 @@ type pcoTeamMemberRelationships struct {
 
 type pcoRelationship struct {
 	Data *pcoRelationshipData `json:"data"`
+}
+
+type pcoRelationshipCollection struct {
+	Data []pcoRelationshipData `json:"data"`
 }
 
 type pcoRelationshipData struct {
@@ -140,6 +145,7 @@ func fetchPlans(ctx *component.ComponentContainer, input d.ListPlansInput) ([]d.
 	query := url.Values{}
 	query.Set("per_page", "100")
 	query.Set("order", "sort_date")
+	query.Set("include", "series,plan_times")
 
 	filters := []string{}
 	if !input.From.IsZero() {
@@ -164,7 +170,7 @@ func fetchPlans(ctx *component.ComponentContainer, input d.ListPlansInput) ([]d.
 	for _, item := range payload.Data {
 		items = append(items, normalizePlan(item, payload.Included))
 	}
-	return filterPlansByRange(items, input.From, input.To), nil
+	return items, nil
 }
 
 func fetchPlanDetails(ctx *component.ComponentContainer, input d.GetPlanDetailsInput) (d.PlanSummary, []d.PlanTeam, error) {
@@ -178,7 +184,9 @@ func fetchPlanDetails(ctx *component.ComponentContainer, input d.GetPlanDetailsI
 	}
 
 	planEndpoint := fmt.Sprintf("/service_types/%s/plans/%s", url.PathEscape(input.ServiceTypeID), url.PathEscape(input.PlanID))
-	planPayload, err := pcoRequest[pcoDocumentResponse[pcoPlanResource]](ctx, http.MethodGet, planEndpoint, nil)
+	planQuery := url.Values{}
+	planQuery.Set("include", "series,plan_times")
+	planPayload, err := pcoRequest[pcoDocumentResponse[pcoPlanResource]](ctx, http.MethodGet, planEndpoint, planQuery)
 	if err != nil {
 		return zero, nil, err
 	}
@@ -340,11 +348,12 @@ func normalizePlan(resource pcoPlanResource, included []pcoIncludedResource) d.P
 	}
 
 	plan := d.PlanSummary{
-		ID:          resource.ID,
-		Title:       resource.Attributes.Title,
-		SeriesTitle: resource.Attributes.SeriesTitle,
-		SortDate:    mustParsePCOTime(resource.Attributes.SortDate),
-		LastTimeAt:  lastTimeAt,
+		ID:             resource.ID,
+		Title:          resource.Attributes.Title,
+		SeriesTitle:    resource.Attributes.SeriesTitle,
+		SortDate:       mustParsePCOTime(resource.Attributes.SortDate),
+		FirstServiceAt: firstServiceTimeForPlan(resource.Relationships.PlanTimes, included),
+		LastTimeAt:     lastTimeAt,
 	}
 	if len(plan.SeriesTitle) == 0 {
 		plan.SeriesTitle = seriesTitleForPlan(resource.Relationships.Series, included)
@@ -421,25 +430,40 @@ func normalizeAssignmentStatus(value string) string {
 	}
 }
 
-func filterPlansByRange(items []d.PlanSummary, from, to time.Time) []d.PlanSummary {
-	if from.IsZero() && to.IsZero() {
-		return items
+func firstServiceTimeForPlan(planTimes pcoRelationshipCollection, included []pcoIncludedResource) *time.Time {
+	if len(planTimes.Data) == 0 {
+		return nil
 	}
 
-	filtered := make([]d.PlanSummary, 0, len(items))
-	for _, item := range items {
-		if item.SortDate.IsZero() {
+	includedByID := map[string]pcoIncludedResource{}
+	for _, item := range included {
+		if item.Type != "PlanTime" {
 			continue
 		}
-		if !from.IsZero() && item.SortDate.Before(from) {
-			continue
-		}
-		if !to.IsZero() && item.SortDate.After(to) {
-			continue
-		}
-		filtered = append(filtered, item)
+		includedByID[item.ID] = item
 	}
-	return filtered
+
+	var first *time.Time
+	for _, relation := range planTimes.Data {
+		item, ok := includedByID[relation.ID]
+		if !ok {
+			continue
+		}
+		if !strings.EqualFold(readIncludedString(item, "time_type"), "service") {
+			continue
+		}
+
+		startsAt, ok := readIncludedTime(item, "starts_at")
+		if !ok {
+			continue
+		}
+		if first == nil || startsAt.Before(*first) {
+			copy := startsAt
+			first = &copy
+		}
+	}
+
+	return first
 }
 
 func personIDForMember(member pcoTeamMemberResource) string {
@@ -482,6 +506,26 @@ func readIncludedString(resource pcoIncludedResource, keys ...string) string {
 		}
 	}
 	return ""
+}
+
+func readIncludedTime(resource pcoIncludedResource, keys ...string) (time.Time, bool) {
+	for _, key := range keys {
+		raw, ok := resource.Attributes[key]
+		if !ok {
+			continue
+		}
+
+		var value string
+		if err := json.Unmarshal(raw, &value); err != nil {
+			continue
+		}
+
+		if parsed, ok := parsePCOTime(value); ok {
+			return parsed, true
+		}
+	}
+
+	return time.Time{}, false
 }
 
 func mustParsePCOTime(value string) time.Time {

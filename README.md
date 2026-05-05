@@ -36,30 +36,22 @@ The shared `definitions` package exposes:
 Add the dependency to your app:
 
 ```bash
-go get github.com/jacksonzamorano/strata@v1.0.0
-go get github.com/jacksonzamorano/strata-pco@latest
+strata add github.com/jacksonzamorano/strata-pco
 ```
 
-Import the component into your runtime:
+Your runtime setup does not need to import the component in code:
 
 ```go
 package main
 
 import (
-	"os"
-	"path"
-
 	"github.com/jacksonzamorano/strata"
 )
 
 func main() {
-	cd, _ := os.Getwd()
-
 	rt := strata.NewRuntime([]strata.Task{
 		// your tasks here
-	}, strata.Import(
-		strata.ImportLocal(path.Join(path.Dir(cd), "strata-pco")),
-	))
+	})
 
 	panic(rt.Start())
 }
@@ -78,7 +70,7 @@ import (
 )
 
 func upcomingPlans(input strata.RouteTaskNoInput, ctx *strata.TaskContext) *strata.RouteResult {
-	plans, ok := pco.ListPlans.Execute(ctx.Container, pco.ListPlansInput{
+	plans, ok := pco.ListPlans.Execute(ctx, pco.ListPlansInput{
 		ServiceTypeID: "12345",
 		From:          time.Now(),
 		To:            time.Now().Add(14 * 24 * time.Hour),

@@ -6,47 +6,48 @@ import (
 )
 
 func listServiceTypes(
-	input *component.ComponentInput[struct{}, d.ListServiceTypesOutput],
+	input struct{},
 	ctx *component.ComponentContainer,
-) *component.ComponentReturn[d.ListServiceTypesOutput] {
+) (*d.ListServiceTypesOutput, error) {
 	serviceTypes, err := fetchServiceTypes(ctx)
 	if err != nil {
 		ctx.Logger.Log("Error when listing service types: %s", err.Error())
-		return input.Error(err.Error())
+		return nil, err
 	}
-	return input.Return(d.ListServiceTypesOutput{Items: serviceTypes})
+	return &d.ListServiceTypesOutput{Items: serviceTypes}, nil
 }
 
 func listPlans(
-	input *component.ComponentInput[d.ListPlansInput, d.ListPlansOutput],
+	input d.ListPlansInput,
 	ctx *component.ComponentContainer,
-) *component.ComponentReturn[d.ListPlansOutput] {
-	plans, err := fetchPlans(ctx, input.Body)
+) (*d.ListPlansOutput, error) {
+	plans, err := fetchPlans(ctx, input)
 	if err != nil {
 		ctx.Logger.Log("Error when listing plans: %s", err.Error())
-		return input.Error(err.Error())
+		return nil, err
 	}
-	return input.Return(d.ListPlansOutput{Items: plans})
+	return &d.ListPlansOutput{Items: plans}, nil
 }
 
 func getPlanDetails(
-	input *component.ComponentInput[d.GetPlanDetailsInput, d.GetPlanDetailsOutput],
+	input d.GetPlanDetailsInput,
 	ctx *component.ComponentContainer,
-) *component.ComponentReturn[d.GetPlanDetailsOutput] {
-	plan, teams, err := fetchPlanDetails(ctx, input.Body)
+) (*d.GetPlanDetailsOutput, error) {
+	plan, teams, err := fetchPlanDetails(ctx, input)
 	if err != nil {
 		ctx.Logger.Log("Error when getting plan details: %s", err.Error())
-		return input.Error(err.Error())
+		return nil, err
 	}
-	return input.Return(d.GetPlanDetailsOutput{Plan: plan, Teams: teams})
+	return &d.GetPlanDetailsOutput{Plan: plan, Teams: teams}, nil
 }
 
 func clearAuthorization(
-	input *component.ComponentInput[struct{}, string],
+	input struct{},
 	ctx *component.ComponentContainer,
-) *component.ComponentReturn[string] {
+) (*string, error) {
 	clearStoredAuthorization(ctx)
-	return input.Return("Planning Center authorization cleared.")
+	message := "Planning Center authorization cleared."
+	return &message, nil
 }
 
 func main() {
